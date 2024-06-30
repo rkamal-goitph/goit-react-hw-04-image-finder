@@ -1,4 +1,4 @@
-import { Component } from "react";
+import React, {useState, useEffect } from "react";
 import Button from './Button/Button'; 
 import ImageGallery from './ImageGallery/ImageGallery';
 import Searchbar from './Searchbar/Searchbar';
@@ -7,59 +7,49 @@ import css from './App.module.css';
 import { getAPI } from 'pixabay-api';
 import toast, { Toaster } from 'react-hot-toast';
 
-export class App extends Component {
-  state = {
-    searchQuery: '',
-    currentPage: 1,
-    images: [],
-    isLoading: false,
-    isError: false,
-    isEnd: false,
-  };
+export const App = () => {
+  const [searchQuery, setSearchQuery] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [images, setImages] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isError, setIsError] = useState(false);
+  const [isEnd, setIsEnd] = useState(false);
+ 
+  useEffect(() => {
+    const fetchImages = async () => {
+      if (!searchQuery) return;
 
-  async componentDidUpdate(_prevProps, prevState) {
-    const { searchQuery, currentPage } = this.state;
+      setIsLoading(true);
+      setIsError(false);
 
-    if (
-      prevState.searchQuery !== searchQuery ||
-      prevState.currentPage !== currentPage
-    ) {
-      await this.fetchImages();
-    }
-  }
-
-  fetchImages = async () => {
-    this.setState({ isLoading: true, isError: false });
-
-    const { searchQuery, currentPage } = this.state;
-
-    try {
-      const response = await getAPI(searchQuery, currentPage);
-      console.log(response);
-      const { totalHits, hits } = response;
-
-      this.setState(prevState => ({
-        images: currentPage === 1 ? hits : [...prevState.images, ...hits],
-        isLoading: false,
-        isEnd: prevState.images.length + hits.length >= totalHits,
-      }));
-
-      if (hits.length === 0) {
-        toast('No images found. Try a different search.');
-        return;
+      try {
+        const response = await getAPI(searchQuery, currentPage);
+        const { totalHits, hits } = response;
+      
+        if (hits.length === 0) {
+          toast.error('No images found. Try a different search.');
+          setIsLoading(false);
+          return;
+        }
+        if (currentPage === 1) {
+          toast.success(`Hooray! We found ${totalHits} images!`);
+        }
+        setImages(prev => (currentPage === 1 ? hits : [...prev, ...hits]));
+        setIsEnd(currentPage * 12 >= totalHits);
+      } catch (error) {
+        setIsError(true);
+        toast.error(`An error occurred while fetching data: ${error}`);
+      } finally {
+        setIsLoading(false);
       }
-      if (currentPage === 1) {
-        toast(`Hooray! We found ${totalHits} images!`);
-      }
-    } catch (error) {
-      this.setState({ isLoading: false, isError: true });
-      toast.error(`An error occurred while fetching data: ${error}`);
-    }
-  };
+    };
 
-  handleSearchSubmit = query => {
+    fetchImages();
+  }, [searchQuery, currentPage]);
+
+  const handleSearchSubmit = query => {
     const normalizedQuery = query.trim().toLowerCase();
-    const normalizedCurrentQuery = this.state.searchQuery.toLowerCase();
+    const normalizedCurrentQuery = searchQuery.toLowerCase();
 
     if (normalizedQuery === '') {
       toast('Empty string is not a valid search query. Please type again.');
@@ -67,45 +57,47 @@ export class App extends Component {
     }
 
     if (normalizedQuery === normalizedCurrentQuery) {
-     toast(
+      toast(
         'Search query is the same as the previous one. Please provide a new search query.'
-     );
+      );
       return;
     }
     // Only update the state and fetch images if the new query is different
-    if (normalizedQuery !== normalizedCurrentQuery) {
-      this.setState({
-        searchQuery: normalizedQuery,
-        currentPage: 1,
-        images: [],
-        isEnd: false,
-      });
-    }
-  };
-
-  handleLoadMore = () => {
-    if (!this.state.isEnd) {
-    this.setState(prevState => ({ currentPage: prevState.currentPage + 1 }));
-  } else {
-  toast("You've reached the end fo the search results.");
-  }
+    
+    setSearchQuery(normalizedQuery);
+    setCurrentPage(1);
+    setImages([]);
+    setIsEnd(false);
+    
   };
   
-render() {
-  const { images, isLoading, isError, isEnd } = this.state;
-  return (
-    <div className={css.App}>
-      <Searchbar onSubmit={this.handleSearchSubmit} />
-      <ImageGallery images={images} />
-      {isLoading && <Loader />}
-      {!isLoading && !isError && images.length > 0 && !isEnd && (
-        <Button onClick={this.handleLoadMore} />
-      )}
-      {isError && toast.error("Something went wrong. Please try again later.")}
 
-      <Toaster position="top-center" reverseOrder={false}/>
-    </div>
-  );
+  const handleLoadMore = () => {
+    if (!isEnd) {
+      setCurrentPage(prevState => prevState + 1);
+    } else {
+      toast("You've reached the end fo the search results.");
+    };
   }
-}
+
+
+ 
+    return (
+      <div className={css.App}>
+        <Searchbar onSubmit={handleSearchSubmit} />
+        <ImageGallery images={images} />
+        {isLoading && <Loader />}
+        {!isLoading && !isError && images.length > 0 && !isEnd && (
+          <Button onClick={handleLoadMore} />
+        )}
+        {isError && toast.error("Something went wrong. Please try again later.")}
+
+        <Toaster position="top-center" reverseOrder={false} />
+      </div>
+    );
+  };
+
+
+
+
 export default App;
